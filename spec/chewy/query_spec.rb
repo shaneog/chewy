@@ -203,61 +203,6 @@ describe Chewy::Query do
     specify { expect(subject.preference(:_primary).criteria.request_body).to include(preference: :_primary) }
   end
 
-  describe '#facets' do
-    specify do
-      skip_on_version_lt('2.0')
-      expect { subject.facets }.to raise_error(Chewy::RemovedFeature).with_message('removed in elasticsearch 2.0')
-    end
-
-    specify do
-      skip_on_version_gte('2.0')
-      expect(subject.facets(term: { field: 'hello' })).to be_a described_class
-    end
-    specify do
-      skip_on_version_gte('2.0')
-      expect(subject.facets(term: { field: 'hello' })).not_to eq(subject)
-    end
-    specify do
-      skip_on_version_gte('2.0')
-      expect(subject.facets(term: { field: 'hello' }).criteria.facets).to include(term: { field: 'hello' })
-    end
-    specify do
-      skip_on_version_gte('2.0')
-      expect { subject.facets(term: { field: 'hello' }) }.not_to change { subject.criteria.facets }
-    end
-
-    context 'results', :orm do
-      before { stub_model(:city) }
-      let(:cities) { Array.new(10) { |i| City.create! id: i + 1, name: "name#{i}", rating: i % 3 } }
-
-      before do
-        stub_index(:cities) do
-          define_type :city do
-            field :rating, type: 'integer'
-          end
-        end
-      end
-
-      before { CitiesIndex::City.import! cities }
-
-      specify do
-        skip_on_version_gte('2.0')
-        expect(CitiesIndex.facets).to eq({})
-      end
-      specify do
-        skip_on_version_gte('2.0')
-        expect(CitiesIndex.facets(ratings: { terms: { field: 'rating' } }).facets).to eq('ratings' => {
-                                                                                           '_type' => 'terms', 'missing' => 0, 'total' => 10, 'other' => 0,
-                                                                                           'terms' => [
-                                                                                             { 'term' => 0, 'count' => 4 },
-                                                                                             { 'term' => 2, 'count' => 3 },
-                                                                                             { 'term' => 1, 'count' => 3 }
-                                                                                           ]
-                                                                                         })
-      end
-    end
-  end
-
   describe '#aggregations' do
     specify { expect(subject.aggregations(aggregation1: { field: 'hello' })).to be_a described_class }
     specify { expect(subject.aggregations(aggregation1: { field: 'hello' })).not_to eq(subject) }
@@ -348,15 +293,16 @@ describe Chewy::Query do
         end
 
         before { CitiesIndex::City.import! cities }
+        subject { described_class.new(CitiesIndex) }
 
-        specify { expect(CitiesIndex.aggregations).to eq({}) }
+        specify { expect(subject.aggregations).to eq({}) }
         specify do
-          expect(CitiesIndex.aggregations(ratings: { terms: { field: 'rating' } })
-          .aggregations['ratings']['buckets'].map { |h| h.slice('key', 'doc_count') }).to eq([
-            { 'key' => 0, 'doc_count' => 4 },
-            { 'key' => 1, 'doc_count' => 3 },
-            { 'key' => 2, 'doc_count' => 3 }
-          ])
+          expect(subject.aggregations(ratings: { terms: { field: 'rating' } })
+            .aggregations['ratings']['buckets'].map { |h| h.slice('key', 'doc_count') }).to eq([
+              { 'key' => 0, 'doc_count' => 4 },
+              { 'key' => 1, 'doc_count' => 3 },
+              { 'key' => 2, 'doc_count' => 3 }
+            ])
         end
       end
     end
@@ -382,10 +328,11 @@ describe Chewy::Query do
         end
 
         before { CitiesIndex::City.import! cities }
+        subject { described_class.new(CitiesIndex) }
 
-        specify { expect(CitiesIndex.suggest).to eq({}) }
+        specify { expect(subject.suggest).to eq({}) }
         specify do
-          expect(CitiesIndex.suggest(name: { text: 'name', term: { field: 'name' } }).suggest).to eq('name' => [
+          expect(subject.suggest(name: { text: 'name', term: { field: 'name' } }).suggest).to eq('name' => [
             { 'text' => 'name', 'offset' => 0, 'length' => 4, 'options' => [
               { 'text' => 'name0', 'score' => 0.75, 'freq' => 1 },
               { 'text' => 'name1', 'score' => 0.75, 'freq' => 1 },
@@ -639,6 +586,7 @@ describe Chewy::Query do
   describe '#to_a', :orm do
     before { stub_model(:city) }
     let(:cities) { Array.new(3) { |i| City.create! id: i + 1, name: "name#{i}", rating: i } }
+    subject { described_class.new(CitiesIndex) }
 
     context do
       before do
@@ -653,23 +601,23 @@ describe Chewy::Query do
 
       before { CitiesIndex::City.import! cities }
 
-      specify { expect(CitiesIndex.order(:rating).first).to be_a CitiesIndex::City }
-      specify { expect(CitiesIndex.order(:rating).first.name).to eq('name0') }
-      specify { expect(CitiesIndex.order(:rating).first.rating).to eq(0) }
-      specify { expect(CitiesIndex.order(:rating).first.nested).to eq('name' => 'name0') }
-      specify { expect(CitiesIndex.order(:rating).first.id).to eq(cities.first.id.to_s) }
+      specify { expect(subject.order(:rating).first).to be_a CitiesIndex::City }
+      specify { expect(subject.order(:rating).first.name).to eq('name0') }
+      specify { expect(subject.order(:rating).first.rating).to eq(0) }
+      specify { expect(subject.order(:rating).first.nested).to eq('name' => 'name0') }
+      specify { expect(subject.order(:rating).first.id).to eq(cities.first.id.to_s) }
 
-      specify { expect(CitiesIndex.order(:rating).only(:name).first.name).to eq('name0') }
-      specify { expect(CitiesIndex.order(:rating).only(:name).first.rating).to be_nil }
-      specify { expect(CitiesIndex.order(:rating).only(:nested).first.nested).to eq('name' => 'name0') }
+      specify { expect(subject.order(:rating).only(:name).first.name).to eq('name0') }
+      specify { expect(subject.order(:rating).only(:name).first.rating).to be_nil }
+      specify { expect(subject.order(:rating).only(:nested).first.nested).to eq('name' => 'name0') }
 
-      specify { expect(CitiesIndex.order(:rating).first._score).to be_nil }
-      specify { expect(CitiesIndex.all.first._score).to be > 0 }
-      specify { expect(CitiesIndex.query(match: { name: 'name0' }).first._score).to be > 0 }
-      specify { expect(CitiesIndex.query(match: { name: 'name0' }).took).to be >= 0 }
+      specify { expect(subject.order(:rating).first._score).to be_nil }
+      specify { expect(subject.first._score).to be > 0 }
+      specify { expect(subject.query(match: { name: 'name0' }).first._score).to be > 0 }
+      specify { expect(subject.query(match: { name: 'name0' }).took).to be >= 0 }
 
-      specify { expect(CitiesIndex.order(:rating).first._explanation).to be_nil }
-      specify { expect(CitiesIndex.order(:rating).explain.first._explanation).to be_present }
+      specify { expect(subject.order(:rating).first._explanation).to be_nil }
+      specify { expect(subject.order(:rating).explain.first._explanation).to be_present }
     end
 
     context 'sourceless' do
@@ -686,10 +634,10 @@ describe Chewy::Query do
       end
       before { CitiesIndex::City.import! cities }
 
-      specify { expect(CitiesIndex.order(:rating).first).to be_a CitiesIndex::City }
-      specify { expect(CitiesIndex.order(:rating).first.name).to be_nil }
-      specify { expect(CitiesIndex.order(:rating).first.rating).to be_nil }
-      specify { expect(CitiesIndex.order(:rating).first.nested).to be_nil }
+      specify { expect(subject.order(:rating).first).to be_a CitiesIndex::City }
+      specify { expect(subject.order(:rating).first.name).to be_nil }
+      specify { expect(subject.order(:rating).first.rating).to be_nil }
+      specify { expect(subject.order(:rating).first.nested).to be_nil }
     end
   end
 end
